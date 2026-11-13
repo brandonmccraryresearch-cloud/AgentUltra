@@ -156,12 +156,23 @@ class PipelineResult:
         v = self.verification
         g = self.grounding
         s = self.synthesis
+        numerical_stability: bool | None = None
+        if v:
+            numerical_checks = getattr(v, "numerical_checks", None)
+            if isinstance(numerical_checks, bool):
+                numerical_stability = numerical_checks
+            elif isinstance(numerical_checks, dict):
+                if isinstance(numerical_checks.get("numerical_stability"), bool):
+                    numerical_stability = numerical_checks["numerical_stability"]
+                elif isinstance(numerical_checks.get("stable"), bool):
+                    numerical_stability = numerical_checks["stable"]
+                elif isinstance(numerical_checks.get("passed"), bool):
+                    numerical_stability = numerical_checks["passed"]
+
         return {
             "dimensional_consistency": v.dimensional_consistent if v else None,
             "limiting_cases": v.limiting_cases_recovered if v else None,
-            "numerical_stability": (
-                v.status != VerificationStatus.FALSIFIED if v else None
-            ),
+            "numerical_stability": numerical_stability,
             "independence_verification": (
                 len(v.alternative_derivations) > 0 if v else None
             ),
