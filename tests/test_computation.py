@@ -40,6 +40,20 @@ class TestRootSystems:
         assert rs.rank == 2
         assert rs.num_positive_roots == 6
         assert rs.dimension == 14
+        # Exact root vectors, in height order: a1, a2, a1+a2, 2a1+a2,
+        # 3a1+a2, 3a1+2a2. (A count-only check previously passed with
+        # three wrong entries: two negated roots and one non-root.)
+        assert rs.positive_roots == [
+            [1.0, -1.0, 0.0],
+            [-2.0, 1.0, 1.0],
+            [-1.0, 0.0, 1.0],
+            [0.0, -1.0, 1.0],
+            [1.0, -2.0, 1.0],
+            [-1.0, -1.0, 2.0],
+        ]
+        # Every positive root has squared norm 2 (short) or 6 (long).
+        for root in rs.positive_roots:
+            assert sum(x * x for x in root) in (2.0, 6.0)
 
     def test_d_requires_rank_2(self):
         with pytest.raises(ValueError):
