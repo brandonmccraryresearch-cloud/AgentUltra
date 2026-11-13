@@ -125,6 +125,15 @@ def richardson_extrapolation(
     """
     if len(values) < 2:
         raise ValueError("Need at least two values for Richardson extrapolation")
+    if len(step_sizes) != len(values):
+        raise ValueError(
+            f"step_sizes and values must have the same length "
+            f"(got {len(step_sizes)} step sizes and {len(values)} values)"
+        )
+    if len(step_sizes) < 2:
+        raise ValueError("Need at least two step sizes for Richardson extrapolation")
+    if any(h <= 0 for h in step_sizes):
+        raise ValueError("All step sizes must be positive")
 
     # Estimate order from three finest values if available
     if len(values) >= 3 and expected_order is None:
@@ -138,10 +147,22 @@ def richardson_extrapolation(
     else:
         order = expected_order if expected_order is not None else 2.0
 
-    # Extrapolate from the two finest values
+    # Extrapolate from the two finest values. The denominator (1 - ratio)
+    # vanishes when the two finest step sizes are equal, or when the
+    # convergence order is zero (ratio == 1) — both mean no extrapolation
+    # is possible, so reject them instead of dividing by zero.
     h_fine, h_coarse = step_sizes[-1], step_sizes[-2]
     f_fine, f_coarse = values[-1], values[-2]
+    if h_fine == h_coarse:
+        raise ValueError(
+            "The two finest step sizes must differ for Richardson extrapolation"
+        )
     ratio = (h_fine / h_coarse) ** order
+    if abs(1.0 - ratio) < 1e-15:
+        raise ValueError(
+            "Richardson extrapolation is undefined here: the convergence "
+            f"order ({order}) makes the extrapolation ratio equal to 1"
+        )
     extrapolated = float((f_fine - ratio * f_coarse) / (1.0 - ratio))
 
     return ConvergenceResult(

@@ -107,8 +107,15 @@ class MCPClient(ABC):
     async def call(self, method: str, **params: Any) -> Any:
         """High-level RPC call: send a request and return the result.
 
-        Raises ``RuntimeError`` on JSON-RPC errors.
+        Raises ``RuntimeError`` on JSON-RPC errors, and also when the
+        client is not connected — an RPC must never silently succeed
+        against a dead transport, or lifecycle bugs stay hidden.
         """
+        if not self._connected:
+            raise RuntimeError(
+                f"Cannot call {self.server_type.value}.{method}: "
+                "MCP client is not connected (call connect() first)"
+            )
         req = MCPRequest(method=method, params=params)
         logger.debug("MCP call: %s.%s(%s)", self.server_type.value, method, params)
         resp = await self.send(req)
@@ -143,6 +150,11 @@ class StubMCPClient(MCPClient):
         self._connected = False
 
     async def send(self, request: MCPRequest) -> MCPResponse:
+        if not self._connected:
+            raise RuntimeError(
+                f"Cannot send {request.method}: "
+                "StubMCPClient is not connected (call connect() first)"
+            )
         result = self._responses.get(request.method, {"status": "stub_response"})
         return MCPResponse(request_id=request.request_id, result=result)
 

@@ -1,5 +1,7 @@
 """Tests for the research session management."""
 
+import pytest
+
 from agent_ultra.core.session import (
     ResearchSession,
     SessionStatus,
@@ -68,8 +70,22 @@ class TestResearchSession:
     def test_update_unknown_gate_raises(self):
         session = ResearchSession()
         session.start("test")
-        try:
+        with pytest.raises(ValueError, match="Unknown quality gate"):
             session.update_quality_gate("nonexistent_gate", True)
-            assert False, "Should have raised ValueError"
-        except ValueError:
-            pass
+
+    def test_gate_names_align_with_pipeline(self):
+        # Session gate names must match PipelineResult.passed_quality_gates
+        # keys wherever the pipeline computes the gate.
+        session = ResearchSession()
+        session.start("test")
+        result = session.evaluate_claim("test claim")
+        pipeline_gates = result.passed_quality_gates
+        session_gates = {g.name: g.passed for g in session.quality_gates}
+        for name in pipeline_gates:
+            assert name in session_gates, f"pipeline gate {name!r} missing from session"
+        # ... and the pipeline-computed values were synced in. A bare
+        # pipeline run assigns no classification and assesses no
+        # falsifiability, so those gates sync to False (not "unknown").
+        assert session_gates["confidence_graded"] is True
+        assert session_gates["classification_assigned"] is False
+        assert session_gates["falsifiability_assessed"] is False

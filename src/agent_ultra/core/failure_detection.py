@@ -274,13 +274,22 @@ class FailureDetector:
 
         A simple heuristic: any step containing words like "obviously",
         "clearly", "well-known", "trivially" should have its underlying
-        assumption explicitly listed.
+        assumption explicitly listed. No alert is raised for a step whose
+        underlying assumption is already stated, or is in the supplied
+        set of well-known assumptions — those are assumed, not silent.
         """
         alerts: list[FailureAlert] = []
         trigger_words = {"obviously", "clearly", "well-known", "trivially", "it is easy to see"}
+        # Assumptions already on the record (stated in the derivation, or
+        # supplied as well-known background) do not count as silent.
+        known = {a.lower() for a in stated_assumptions}
+        if well_known_assumptions:
+            known |= {a.lower() for a in well_known_assumptions}
 
         for idx, step in enumerate(derivation_steps):
             step_lower = step.lower()
+            if any(assumption and assumption in step_lower for assumption in known):
+                continue
             for trigger in trigger_words:
                 if trigger in step_lower:
                     alerts.append(

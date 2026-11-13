@@ -109,6 +109,24 @@ class TestConvergence:
         result = richardson_extrapolation(vals, hs)
         assert abs(result.extrapolated_value - exact) < 0.01
 
+    def test_richardson_mismatched_lengths(self):
+        with pytest.raises(ValueError, match="same length"):
+            richardson_extrapolation([1.0, 1.1, 1.2], [0.5, 0.25])
+
+    def test_richardson_equal_step_sizes(self):
+        with pytest.raises(ValueError, match="must differ"):
+            richardson_extrapolation([1.0, 1.1], [0.25, 0.25])
+
+    def test_richardson_zero_order(self):
+        with pytest.raises(ValueError, match="ratio equal to 1"):
+            richardson_extrapolation(
+                [1.0, 1.1], [0.5, 0.25], expected_order=0.0
+            )
+
+    def test_richardson_nonpositive_step(self):
+        with pytest.raises(ValueError, match="positive"):
+            richardson_extrapolation([1.0, 1.1], [0.5, 0.0])
+
 
 class TestStatistics:
     def test_bootstrap(self):

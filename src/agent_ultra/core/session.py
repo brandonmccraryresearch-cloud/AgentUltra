@@ -117,7 +117,14 @@ class ResearchSession:
     # -- Quality gates -------------------------------------------------------
 
     def _initialize_quality_gates(self) -> None:
-        """Set up the standard quality gates from the spec."""
+        """Set up the standard quality gates from the spec.
+
+        Gate names match ``PipelineResult.passed_quality_gates`` exactly
+        wherever the pipeline computes the gate, so session and pipeline
+        reports can be aggregated and compared directly. Two gates are
+        session-only (the pipeline does not compute them): statistical
+        significance and honesty_check.
+        """
         gate_definitions = [
             ("dimensional_consistency", "All equations have correct units"),
             ("limiting_cases", "Known physics recovered in appropriate limits"),
@@ -125,7 +132,18 @@ class ResearchSession:
             ("statistical_significance", "Error bars computed and reported"),
             ("independence_verification", "At least one alternative computation method"),
             ("honesty_check", "No overclaiming; all caveats stated"),
-            ("classification", "Properly labeled as derivation/prediction/postdiction/calibration"),
+            (
+                "classification_assigned",
+                "Properly labeled as derivation/prediction/postdiction/calibration",
+            ),
+            (
+                "falsifiability_assessed",
+                "Falsifiability of the claim has been assessed",
+            ),
+            (
+                "confidence_graded",
+                "An overall confidence grade has been assigned",
+            ),
         ]
         self.quality_gates = [
             QualityGate(name=name, description=desc) for name, desc in gate_definitions
@@ -159,6 +177,16 @@ class ResearchSession:
         self._log("pipeline", f"Evaluating claim: {statement[:80]}…")
         result = self._pipeline.run(statement, **kwargs)
         self.pipeline_results.append(result)
+        # Sync the pipeline-computed quality gates into the session gates
+        # (names match by construction; None means "not assessed" and
+        # leaves the session gate untouched).
+        for name, passed in result.passed_quality_gates.items():
+            if passed is None:
+                continue
+            for gate in self.quality_gates:
+                if gate.name == name:
+                    gate.passed = passed
+                    break
         return result
 
     def run_hygiene_audit(self, **kwargs: Any) -> HygieneReport:

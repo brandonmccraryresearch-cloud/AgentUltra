@@ -104,6 +104,31 @@ class TestFailureDetector:
         )
         assert len(alerts) == 2  # "obviously" and "clearly"
 
+    def test_silent_assumptions_suppressed_when_stated(self):
+        detector = FailureDetector()
+        alerts = detector.detect_silent_assumptions(
+            stated_assumptions=["x > 0"],
+            derivation_steps=[
+                "It is obviously true that x > 0.",
+                "Clearly, the integral converges.",
+            ],
+        )
+        # The x > 0 step is stated, not silent; only "clearly" alerts.
+        assert len(alerts) == 1
+        assert "clearly" in alerts[0].description
+
+    def test_silent_assumptions_suppressed_when_well_known(self):
+        detector = FailureDetector()
+        alerts = detector.detect_silent_assumptions(
+            stated_assumptions=[],
+            derivation_steps=[
+                "It is obviously true that the integral converges.",
+                "Clearly, the integral converges.",
+            ],
+            well_known_assumptions={"the integral converges"},
+        )
+        assert len(alerts) == 0
+
     def test_run_all(self):
         detector = FailureDetector()
         alerts = detector.run_all(

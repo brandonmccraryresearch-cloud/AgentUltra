@@ -64,6 +64,35 @@ class TestReasoningPipeline:
         assert "dimensional_consistency" in gates
         assert "classification_assigned" in gates
 
+    def test_numerical_stability_gate_unassessed_is_none(self):
+        # No stability check performed: the gate must report None,
+        # not a pass inferred from the verification status.
+        v = VerificationResult(status=VerificationStatus.VERIFIED)
+        result = PipelineResult(claim_id="t", verification=v)
+        assert result.passed_quality_gates["numerical_stability"] is None
+
+    def test_numerical_stability_gate_from_explicit_field(self):
+        v = VerificationResult(
+            status=VerificationStatus.VERIFIED, numerical_stability=True
+        )
+        result = PipelineResult(claim_id="t", verification=v)
+        assert result.passed_quality_gates["numerical_stability"] is True
+
+    def test_numerical_stability_gate_from_check_list(self):
+        v = VerificationResult(
+            status=VerificationStatus.VERIFIED,
+            numerical_checks=[{"check": "grid_refinement", "passed": False}],
+        )
+        result = PipelineResult(claim_id="t", verification=v)
+        assert result.passed_quality_gates["numerical_stability"] is False
+
+    def test_classification_defaults_to_none(self):
+        # A grounding result that never ran must not claim DERIVATION.
+        g = GroundingResult()
+        assert g.classification is None
+        result = PipelineResult(claim_id="t", grounding=g)
+        assert result.passed_quality_gates["classification_assigned"] is False
+
     def test_auto_grade_high_score(self):
         v = VerificationResult(
             status=VerificationStatus.VERIFIED,

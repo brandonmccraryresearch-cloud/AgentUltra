@@ -2,6 +2,8 @@
 
 import asyncio
 
+import pytest
+
 from agent_ultra.mcp.client import (
     MCPRequest,
     MCPResponse,
@@ -9,6 +11,7 @@ from agent_ultra.mcp.client import (
     MCPServerType,
     StubMCPClient,
 )
+from agent_ultra.mcp.servers import MathMCPClient
 
 
 class TestMCPRequest:
@@ -39,9 +42,9 @@ class TestStubMCPClient:
     def test_connect_disconnect(self):
         client = StubMCPClient(MCPServerType.MATH)
         assert not client.is_connected
-        asyncio.get_event_loop().run_until_complete(client.connect())
+        asyncio.run(client.connect())
         assert client.is_connected
-        asyncio.get_event_loop().run_until_complete(client.disconnect())
+        asyncio.run(client.disconnect())
         assert not client.is_connected
 
     def test_call(self):
@@ -49,11 +52,41 @@ class TestStubMCPClient:
             MCPServerType.MATH,
             responses={"solve": {"x": [1, -1]}},
         )
-        asyncio.get_event_loop().run_until_complete(client.connect())
-        result = asyncio.get_event_loop().run_until_complete(
+        asyncio.run(client.connect())
+        result = asyncio.run(
             client.call("solve", equation="x^2 - 1")
         )
         assert result == {"x": [1, -1]}
+
+    def test_call_without_connect_raises(self):
+        client = StubMCPClient(MCPServerType.MATH)
+        assert not client.is_connected
+        with pytest.raises(RuntimeError, match="not connected"):
+            asyncio.run(client.call("solve", equation="x^2 - 1"))
+
+    def test_send_without_connect_raises(self):
+        client = StubMCPClient(MCPServerType.MATH)
+        assert not client.is_connected
+        with pytest.raises(RuntimeError, match="not connected"):
+            asyncio.run(client.send(MCPRequest(method="solve")))
+
+    def test_call_after_disconnect_raises(self):
+        client = StubMCPClient(MCPServerType.MATH)
+        asyncio.run(client.connect())
+        asyncio.run(client.disconnect())
+        with pytest.raises(RuntimeError, match="not connected"):
+            asyncio.run(client.call("solve", equation="x^2 - 1"))
+
+
+class TestTypedWrappers:
+    def test_wrapper_auto_connects(self):
+        # The typed wrappers own their (stub) client and connect it on
+        # first use, so callers need not manage the lifecycle.
+        wrapper = MathMCPClient()
+        assert not wrapper._client.is_connected
+        result = asyncio.run(wrapper.solve("x^2 - 1", "x"))
+        assert result == {"status": "stub_response"}
+        assert wrapper._client.is_connected
 
 
 class TestMCPServerRegistry:
@@ -70,6 +103,6 @@ class TestMCPServerRegistry:
         c2 = StubMCPClient(MCPServerType.LEAN_LSP)
         registry.register(c1)
         registry.register(c2)
-        asyncio.get_event_loop().run_until_complete(registry.connect_all())
+        asyncio.run(registry.connect_all())
         assert c1.is_connected
         assert c2.is_connected

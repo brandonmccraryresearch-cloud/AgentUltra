@@ -105,6 +105,10 @@ class VerificationResult:
     status: VerificationStatus = VerificationStatus.UNRESOLVED
     formal_proof: str | None = None
     numerical_checks: list[dict[str, Any]] = field(default_factory=list)
+    # Explicit numerical-stability outcome (e.g. grid-refinement /
+    # resolution-sensitivity check). None means it was never assessed;
+    # the quality gate must not infer it from ``status``.
+    numerical_stability: bool | None = None
     dimensional_consistent: bool | None = None
     limiting_cases_recovered: bool | None = None
     alternative_derivations: list[str] = field(default_factory=list)
@@ -114,9 +118,15 @@ class VerificationResult:
 
 @dataclass
 class GroundingResult:
-    """Output of Phase 3 — Grounding."""
+    """Output of Phase 3 — Grounding.
 
-    classification: ResultClassification = ResultClassification.DERIVATION
+    ``classification`` is None until the grounding phase actually assigns
+    one; it must not default to DERIVATION, or the
+    ``classification_assigned`` quality gate would report success for a
+    classification that never happened.
+    """
+
+    classification: ResultClassification | None = None
     experimental_comparison: dict[str, Any] = field(default_factory=dict)
     precision_percent: float | None = None
     calibration_inputs: list[str] = field(default_factory=list)
@@ -135,6 +145,32 @@ class SynthesisResult:
     parsimony_ratio: float | None = None
     framework_updates: list[str] = field(default_factory=list)
     notes: str = ""
+
+
+def _stability_from_checks(checks: Any) -> bool | None:
+    """Extract a numerical-stability verdict from recorded checks.
+
+    Accepts the forms callers actually produce: a bare bool, a single
+    dict, or a list of check dicts (the declared type of
+    ``VerificationResult.numerical_checks``). Each dict is scanned for a
+    stability verdict under the keys ``"numerical_stability"``,
+    ``"stable"``, then ``"passed"``. Returns None when no check records
+    a stability verdict — i.e. stability was never assessed.
+    """
+    if isinstance(checks, bool):
+        return checks
+    if isinstance(checks, dict):
+        for key in ("numerical_stability", "stable", "passed"):
+            if isinstance(checks.get(key), bool):
+                return checks[key]
+        return None
+    if isinstance(checks, list):
+        for entry in checks:
+            if isinstance(entry, dict):
+                for key in ("numerical_stability", "stable", "passed"):
+                    if isinstance(entry.get(key), bool):
+                        return entry[key]
+    return None
 
 
 @dataclass
@@ -157,17 +193,14 @@ class PipelineResult:
         g = self.grounding
         s = self.synthesis
         numerical_stability: bool | None = None
-        if v:
-            numerical_checks = getattr(v, "numerical_checks", None)
-            if isinstance(numerical_checks, bool):
-                numerical_stability = numerical_checks
-            elif isinstance(numerical_checks, dict):
-                if isinstance(numerical_checks.get("numerical_stability"), bool):
-                    numerical_stability = numerical_checks["numerical_stability"]
-                elif isinstance(numerical_checks.get("stable"), bool):
-                    numerical_stability = numerical_checks["stable"]
-                elif isinstance(numerical_checks.get("passed"), bool):
-                    numerical_stability = numerical_checks["passed"]
+        if v is not None:
+            # Preferred source: the explicit field set by the verification
+            # phase (e.g. after a grid-refinement / resolution-sensitivity
+            # check). Fall back to scanning the recorded numerical checks.
+            if isinstance(v.numerical_stability, bool):
+                numerical_stability = v.numerical_stability
+            else:
+                numerical_stability = _stability_from_checks(v.numerical_checks)
 
         return {
             "dimensional_consistency": v.dimensional_consistent if v else None,
